@@ -1,0 +1,1 @@
+/home/borngreat/Desktop/blogverse-backend/migration/target/debug/migration: /home/borngreat/Desktop/blogverse-backend/migration/src/lib.rs /home/borngreat/Desktop/blogverse-backend/migration/src/m20220101_000001_create_table.rs /home/borngreat/Desktop/blogverse-backend/migration/src/main.rs
