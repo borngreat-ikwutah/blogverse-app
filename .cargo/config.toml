@@ -1,0 +1,6 @@
+[alias]
+# We create a new command called 'dev'
+dev = "watch -x run"
+
+# Optional: A 'lint' command to check code style quickly
+lint = "clippy -- -D warnings"
