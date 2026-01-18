@@ -1,0 +1,17 @@
+meta {
+  name: Get Story Comments
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/stories/{{storyId}}/comments
+  body: none
+  auth: none
+}
+
+params:query {
+  ~limit: 20
+  ~offset: 0
+  ~sort: latest
+}

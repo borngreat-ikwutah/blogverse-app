@@ -1,0 +1,21 @@
+meta {
+  name: Update Comment
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/comments/{{commentId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "content": "Updated comment content - I changed my mind!"
+  }
+}

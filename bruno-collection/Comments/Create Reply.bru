@@ -1,0 +1,22 @@
+meta {
+  name: Create Reply
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/stories/{{storyId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "content": "I agree with your comment!",
+    "parent_id": "{{commentId}}"
+  }
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Create Comment
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/stories/{{storyId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "content": "Great story! I really enjoyed reading this."
+  }
+}
+
+script:post-response {
+  if (res.body.success && res.body.data && res.body.data.id) {
+    bru.setVar("commentId", res.body.data.id);
+  }
+}

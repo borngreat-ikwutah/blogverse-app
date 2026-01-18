@@ -1,0 +1,19 @@
+meta {
+  name: Check Is Following
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/user/{{targetUserId}}/is-following
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  targetUserId: replace-with-user-id
+}

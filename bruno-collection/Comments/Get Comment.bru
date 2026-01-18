@@ -1,0 +1,11 @@
+meta {
+  name: Get Comment
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/comments/{{commentId}}
+  body: none
+  auth: none
+}

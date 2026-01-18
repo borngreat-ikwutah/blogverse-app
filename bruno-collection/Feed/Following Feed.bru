@@ -1,0 +1,21 @@
+meta {
+  name: Following Feed
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/feed/following
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+params:query {
+  ~limit: 20
+  ~offset: 0
+  ~sort: latest
+}

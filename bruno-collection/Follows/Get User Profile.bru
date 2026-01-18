@@ -1,0 +1,19 @@
+meta {
+  name: Get User Profile
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/user/{{targetUserId}}/profile
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+vars:pre-request {
+  targetUserId: replace-with-user-id
+}

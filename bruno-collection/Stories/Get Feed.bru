@@ -1,0 +1,18 @@
+meta {
+  name: Get Feed
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/stories
+  body: none
+  auth: none
+}
+
+params:query {
+  ~limit: 20
+  ~offset: 0
+  ~sort: latest
+  ~tag: rust
+}

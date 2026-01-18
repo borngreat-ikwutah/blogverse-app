@@ -1,0 +1,20 @@
+meta {
+  name: Get Following
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/user/{{targetUserId}}/following
+  body: none
+  auth: none
+}
+
+params:query {
+  ~limit: 20
+  ~offset: 0
+}
+
+vars:pre-request {
+  targetUserId: replace-with-user-id
+}

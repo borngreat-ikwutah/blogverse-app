@@ -1,0 +1,15 @@
+meta {
+  name: Get User By ID
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/user/{{userId}}
+  body: none
+  auth: none
+}
+
+vars:pre-request {
+  userId: 6fecb843-1e94-429b-afc6-1ef4d4704f53
+}

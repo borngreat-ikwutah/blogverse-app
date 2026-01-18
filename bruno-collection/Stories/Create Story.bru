@@ -1,0 +1,44 @@
+meta {
+  name: Create Story
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/stories
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "title": "My Amazing Story",
+    "subtitle": "A journey through code",
+    "content": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "This is my first story on BlogVerse!"
+            }
+          ]
+        }
+      ]
+    },
+    "tags": ["rust", "backend", "tutorial"],
+    "publish": true
+  }
+}
+
+script:post-response {
+  if (res.body.success && res.body.data && res.body.data.id) {
+    bru.setVar("storyId", res.body.data.id);
+  }
+}

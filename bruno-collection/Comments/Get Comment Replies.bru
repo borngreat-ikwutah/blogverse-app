@@ -1,0 +1,17 @@
+meta {
+  name: Get Comment Replies
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/comments/{{commentId}}/replies
+  body: none
+  auth: none
+}
+
+params:query {
+  ~limit: 20
+  ~offset: 0
+  ~sort: oldest
+}

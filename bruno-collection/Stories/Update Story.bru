@@ -1,0 +1,23 @@
+meta {
+  name: Update Story
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/stories/{{storyId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "title": "My Updated Story Title",
+    "subtitle": "Now with more content!",
+    "publish": true
+  }
+}
