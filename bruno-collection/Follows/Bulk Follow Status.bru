@@ -1,0 +1,47 @@
+meta {
+  name: Bulk Follow Status
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/user/following-status
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+body:json {
+  {
+    "user_ids": [
+      "{{targetUserId}}"
+    ]
+  }
+}
+
+docs {
+  # Bulk Follow Status Check
+
+  Check follow status for multiple users in a single request.
+  This is much more efficient than making individual is-following requests
+  when rendering a list of users (e.g., search results, suggested users).
+
+  ## Request Body
+  - `user_ids`: Array of user UUIDs to check (max 100)
+
+  ## Response
+  Returns a map of user IDs to boolean follow status.
+
+  ```json
+  {
+    "success": true,
+    "data": {
+      "uuid-1": true,
+      "uuid-2": false
+    }
+  }
+  ```
+}

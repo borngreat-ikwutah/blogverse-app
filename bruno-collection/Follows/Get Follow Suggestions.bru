@@ -1,0 +1,50 @@
+meta {
+  name: Get Follow Suggestions
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/user/suggestions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authToken}}
+}
+
+params:query {
+  ~limit: 10
+}
+
+docs {
+  # Get Follow Suggestions
+
+  Returns suggested users to follow based on mutual connections.
+  These are users who are followed by people you follow, but you don't follow yet.
+
+  ## Query Parameters
+
+  - `limit` (optional): Maximum number of suggestions to return (default: 10, max: 50)
+
+  ## Response
+
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": "uuid",
+        "username": "string",
+        "bio": "string or null",
+        "image": "string or null",
+        "followers_count": 123,
+        "mutual_followers_count": 5
+      }
+    ]
+  }
+  ```
+
+  The `mutual_followers_count` indicates how many users you follow also follow this suggested user.
+}
