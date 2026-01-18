@@ -1,8 +1,11 @@
 use axum::{
     extract::{Path, Query, State},
     response::IntoResponse,
+    Json,
 };
+use serde::Deserialize;
 use sqlx::{FromRow, PgPool, Row};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
@@ -38,6 +41,12 @@ impl From<UserFollowRow> for FollowUserResponse {
     }
 }
 
+/// Request payload for bulk follow status check
+#[derive(Debug, Deserialize)]
+pub struct BulkFollowCheckRequest {
+    pub user_ids: Vec<Uuid>,
+}
+
 /// Follow a user
 /// POST /api/users/:id/follow
 pub async fn follow_user(
@@ -61,6 +70,7 @@ pub async fn follow_user(
         .ok_or(AppError::NotFound("User not found".to_string()))?;
 
     // Insert follow (ignore if already following)
+    // The trigger will automatically update the followers_count
     sqlx::query(
         r#"
         INSERT INTO follows (follower_id, following_id)
@@ -74,18 +84,18 @@ pub async fn follow_user(
     .await
     .map_err(|_| AppError::InternalServerError)?;
 
-    // Get updated follower count
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM follows WHERE following_id = $1")
+    // Get the denormalized follower count directly from users table
+    let count_row = sqlx::query("SELECT followers_count FROM users WHERE id = $1")
         .bind(user_id)
         .fetch_one(&pool)
         .await
         .map_err(|_| AppError::InternalServerError)?;
 
-    let followers_count: i64 = count_row.get("count");
+    let followers_count: i32 = count_row.get("followers_count");
 
     Ok(ApiResponse::success(FollowActionResponse {
         following: true,
-        followers_count,
+        followers_count: followers_count as i64,
     }))
 }
 
@@ -104,7 +114,7 @@ pub async fn unfollow_user(
         .map_err(|_| AppError::InternalServerError)?
         .ok_or(AppError::NotFound("User not found".to_string()))?;
 
-    // Delete follow
+    // Delete follow - the trigger will automatically update the followers_count
     sqlx::query("DELETE FROM follows WHERE follower_id = $1 AND following_id = $2")
         .bind(claims.sub)
         .bind(user_id)
@@ -112,18 +122,18 @@ pub async fn unfollow_user(
         .await
         .map_err(|_| AppError::InternalServerError)?;
 
-    // Get updated follower count
-    let count_row = sqlx::query("SELECT COUNT(*) as count FROM follows WHERE following_id = $1")
+    // Get the denormalized follower count directly from users table
+    let count_row = sqlx::query("SELECT followers_count FROM users WHERE id = $1")
         .bind(user_id)
         .fetch_one(&pool)
         .await
         .map_err(|_| AppError::InternalServerError)?;
 
-    let followers_count: i64 = count_row.get("count");
+    let followers_count: i32 = count_row.get("followers_count");
 
     Ok(ApiResponse::success(FollowActionResponse {
         following: false,
-        followers_count,
+        followers_count: followers_count as i64,
     }))
 }
 
@@ -134,25 +144,19 @@ pub async fn get_followers(
     Path(user_id): Path<Uuid>,
     Query(filter): Query<FollowListFilter>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Verify user exists
-    sqlx::query("SELECT id FROM users WHERE id = $1")
+    // Get user and their denormalized follower count in one query
+    let user_row = sqlx::query("SELECT id, followers_count FROM users WHERE id = $1")
         .bind(user_id)
         .fetch_optional(&pool)
         .await
         .map_err(|_| AppError::InternalServerError)?
         .ok_or(AppError::NotFound("User not found".to_string()))?;
 
+    let total: i32 = user_row.get("followers_count");
+    let total = total as i64;
+
     let limit = filter.limit.unwrap_or(20).min(100);
     let offset = filter.offset.unwrap_or(0);
-
-    // Get total count
-    let total_row = sqlx::query("SELECT COUNT(*) as count FROM follows WHERE following_id = $1")
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-        .map_err(|_| AppError::InternalServerError)?;
-
-    let total: i64 = total_row.get("count");
 
     // Get followers with user info
     let followers = sqlx::query_as::<_, UserFollowRow>(
@@ -192,25 +196,19 @@ pub async fn get_following(
     Path(user_id): Path<Uuid>,
     Query(filter): Query<FollowListFilter>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Verify user exists
-    sqlx::query("SELECT id FROM users WHERE id = $1")
+    // Get user and their denormalized following count in one query
+    let user_row = sqlx::query("SELECT id, following_count FROM users WHERE id = $1")
         .bind(user_id)
         .fetch_optional(&pool)
         .await
         .map_err(|_| AppError::InternalServerError)?
         .ok_or(AppError::NotFound("User not found".to_string()))?;
 
+    let total: i32 = user_row.get("following_count");
+    let total = total as i64;
+
     let limit = filter.limit.unwrap_or(20).min(100);
     let offset = filter.offset.unwrap_or(0);
-
-    // Get total count
-    let total_row = sqlx::query("SELECT COUNT(*) as count FROM follows WHERE follower_id = $1")
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-        .map_err(|_| AppError::InternalServerError)?;
-
-    let total: i64 = total_row.get("count");
 
     // Get following with user info
     let following = sqlx::query_as::<_, UserFollowRow>(
@@ -250,10 +248,10 @@ pub async fn get_user_profile(
     claims: Option<jwt::Claims>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Get user
+    // Get user with denormalized counts in a single query
     let user = sqlx::query(
         r#"
-        SELECT id, username, bio, image, created_at
+        SELECT id, username, bio, image, followers_count, following_count, created_at
         FROM users WHERE id = $1
         "#,
     )
@@ -263,24 +261,8 @@ pub async fn get_user_profile(
     .map_err(|_| AppError::InternalServerError)?
     .ok_or(AppError::NotFound("User not found".to_string()))?;
 
-    // Get follower count
-    let followers_row =
-        sqlx::query("SELECT COUNT(*) as count FROM follows WHERE following_id = $1")
-            .bind(user_id)
-            .fetch_one(&pool)
-            .await
-            .map_err(|_| AppError::InternalServerError)?;
-
-    let followers_count: i64 = followers_row.get("count");
-
-    // Get following count
-    let following_row = sqlx::query("SELECT COUNT(*) as count FROM follows WHERE follower_id = $1")
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-        .map_err(|_| AppError::InternalServerError)?;
-
-    let following_count: i64 = following_row.get("count");
+    let followers_count: i32 = user.get("followers_count");
+    let following_count: i32 = user.get("following_count");
 
     // Check if current user follows this user
     let is_following = if let Some(claims) = claims {
@@ -300,8 +282,8 @@ pub async fn get_user_profile(
         username: user.get("username"),
         bio: user.get("bio"),
         image: user.get("image"),
-        followers_count,
-        following_count,
+        followers_count: followers_count as i64,
+        following_count: following_count as i64,
         is_following,
         created_at: user.get("created_at"),
     }))
@@ -366,8 +348,8 @@ pub async fn get_following_feed(
 
     let query_str = format!(
         r#"
-        SELECT 
-            s.id, s.title, s.subtitle, s.content, s.slug, s.status, s.clap_count, 
+        SELECT
+            s.id, s.title, s.subtitle, s.content, s.slug, s.status, s.clap_count,
             s.created_at, s.updated_at, s.published_at, s.author_id,
             u.username, u.bio, u.image,
             COALESCE(ARRAY_AGG(t.name) FILTER (WHERE t.name IS NOT NULL), '{{}}') as tags
@@ -419,4 +401,132 @@ pub async fn check_following(
     Ok(ApiResponse::success(
         serde_json::json!({ "following": is_following }),
     ))
+}
+
+/// Check follow status for multiple users in a single request
+/// POST /api/user/following-status
+///
+/// This is much more efficient than making individual is-following requests
+/// when rendering a list of users (e.g., search results, suggested users)
+pub async fn check_following_bulk(
+    State(pool): State<PgPool>,
+    claims: jwt::Claims,
+    Json(payload): Json<BulkFollowCheckRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Limit the number of user IDs to prevent abuse
+    if payload.user_ids.len() > 100 {
+        return Err(AppError::UnprocessableEntity(
+            "Maximum 100 user IDs allowed per request".to_string(),
+        ));
+    }
+
+    if payload.user_ids.is_empty() {
+        return Ok(ApiResponse::success(HashMap::<Uuid, bool>::new()));
+    }
+
+    // Get all users that the current user follows from the provided list
+    let following_ids = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT following_id FROM follows
+        WHERE follower_id = $1 AND following_id = ANY($2)
+        "#,
+    )
+    .bind(claims.sub)
+    .bind(&payload.user_ids)
+    .fetch_all(&pool)
+    .await
+    .map_err(|_| AppError::InternalServerError)?;
+
+    // Build a HashMap with follow status for each requested user
+    let result: HashMap<Uuid, bool> = payload
+        .user_ids
+        .into_iter()
+        .map(|id| (id, following_ids.contains(&id)))
+        .collect();
+
+    Ok(ApiResponse::success(result))
+}
+
+/// Get suggested users to follow based on mutual connections
+/// GET /api/user/suggestions
+///
+/// Returns users who are followed by people you follow, but you don't follow yet
+pub async fn get_follow_suggestions(
+    State(pool): State<PgPool>,
+    claims: jwt::Claims,
+    Query(filter): Query<FollowListFilter>,
+) -> Result<impl IntoResponse, AppError> {
+    let limit = filter.limit.unwrap_or(10).min(50);
+
+    // Find users followed by people you follow, that you don't already follow
+    // Ordered by how many mutual connections they have
+    let suggestions = sqlx::query_as::<_, SuggestionRow>(
+        r#"
+        SELECT
+            u.id, u.username, u.bio, u.image, u.followers_count,
+            COUNT(DISTINCT f2.follower_id) as mutual_count
+        FROM follows f1
+        JOIN follows f2 ON f1.following_id = f2.follower_id
+        JOIN users u ON f2.following_id = u.id
+        WHERE f1.follower_id = $1
+          AND f2.following_id != $1
+          AND NOT EXISTS (
+              SELECT 1 FROM follows
+              WHERE follower_id = $1 AND following_id = f2.following_id
+          )
+        GROUP BY u.id
+        ORDER BY mutual_count DESC, u.followers_count DESC
+        LIMIT $2
+        "#,
+    )
+    .bind(claims.sub)
+    .bind(limit)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Follow suggestions error: {:?}", e);
+        AppError::InternalServerError
+    })?;
+
+    let response: Vec<FollowSuggestionResponse> = suggestions
+        .into_iter()
+        .map(FollowSuggestionResponse::from)
+        .collect();
+
+    Ok(ApiResponse::success(response))
+}
+
+/// Helper struct for follow suggestions query
+#[derive(FromRow)]
+struct SuggestionRow {
+    id: Uuid,
+    username: String,
+    bio: Option<String>,
+    image: Option<String>,
+    followers_count: i32,
+    mutual_count: i64,
+}
+
+/// Response for follow suggestions
+#[derive(Debug, serde::Serialize)]
+pub struct FollowSuggestionResponse {
+    pub id: Uuid,
+    pub username: String,
+    pub bio: Option<String>,
+    pub image: Option<String>,
+    pub followers_count: i64,
+    pub mutual_followers_count: i64,
+}
+
+impl From<SuggestionRow> for FollowSuggestionResponse {
+    fn from(s: SuggestionRow) -> Self {
+        FollowSuggestionResponse {
+            id: s.id,
+            username: s.username,
+            bio: s.bio,
+            image: s.image,
+            followers_count: s.followers_count as i64,
+            mutual_followers_count: s.mutual_count,
+        }
+    }
 }

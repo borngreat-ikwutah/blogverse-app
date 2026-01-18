@@ -94,8 +94,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/me", get(auth::handler::get_me));
 
     // User routes (with follow operations)
+    // More specific routes must come before generic /{id}
     let user_router = Router::new()
-        .route("/{id}", get(auth::handler::get_user_by_id))
+        // Bulk operations (most specific, no path params)
+        .route(
+            "/following-status",
+            post(follows::handler::check_following_bulk),
+        )
+        .route(
+            "/suggestions",
+            get(follows::handler::get_follow_suggestions),
+        )
+        // User-specific routes
         .route("/{id}/profile", get(follows::handler::get_user_profile))
         .route(
             "/{id}/follow",
@@ -103,7 +113,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .route("/{id}/followers", get(follows::handler::get_followers))
         .route("/{id}/following", get(follows::handler::get_following))
-        .route("/{id}/is-following", get(follows::handler::check_following));
+        .route("/{id}/is-following", get(follows::handler::check_following))
+        // Generic /{id} route comes last
+        .route("/{id}", get(auth::handler::get_user_by_id));
 
     // Story routes
     let story_router = Router::new()
@@ -145,6 +157,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(|| async { "BlogVerse API v1.0" }))
         .route("/health", get(|| async { "OK" }))
+        .route("/direct/debug", get(|| async { "Direct Hit No Param!" }))
         .nest("/api/auth", auth_router)
         .nest("/api/user", user_router)
         .nest("/api/stories", story_router)
